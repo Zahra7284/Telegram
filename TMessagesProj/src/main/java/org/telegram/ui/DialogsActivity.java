@@ -25,7 +25,6 @@ import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
-import android.support.annotation.Px;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -948,7 +947,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             permissons.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
         }
         String[] items = permissons.toArray(new String[permissons.size()]);
-        activity.requestPermissions(items, 1);
+        try {
+            activity.requestPermissions(items, 1);
+        } catch (Exception ignore) {
+        }
     }
 
     @Override
@@ -969,11 +971,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     floatingButton.setTranslationY(floatingHidden ? AndroidUtilities.dp(100) : 0);
                     floatingButton.setClickable(!floatingHidden);
                     if (floatingButton != null) {
-                        if (Build.VERSION.SDK_INT < 16) {
-                            floatingButton.getViewTreeObserver().removeGlobalOnLayoutListener(this);
-                        } else {
-                            floatingButton.getViewTreeObserver().removeOnGlobalLayoutListener(this);
-                        }
+                        floatingButton.getViewTreeObserver().removeOnGlobalLayoutListener(this);
                     }
                 }
             });
@@ -1373,6 +1371,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 new ThemeDescription(fragmentContextView, 0, new Class[]{FragmentContextView.class}, new String[]{"titleTextView"}, null, null, null, Theme.key_returnToCallText),
 
                 new ThemeDescription(null, 0, null, null, null, null, Theme.key_dialogBackground),
+                new ThemeDescription(null, 0, null, null, null, null, Theme.key_dialogBackgroundGray),
                 new ThemeDescription(null, 0, null, null, null, null, Theme.key_dialogTextBlack),
                 new ThemeDescription(null, 0, null, null, null, null, Theme.key_dialogTextLink),
                 new ThemeDescription(null, 0, null, null, null, null, Theme.key_dialogLinkSelection),

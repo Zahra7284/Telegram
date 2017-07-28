@@ -39,6 +39,7 @@ import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.LaunchActivity;
 import org.telegram.ui.PopupNotificationActivity;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.HashMap;
@@ -916,18 +917,28 @@ public class NotificationsController {
                             if (!shortMessage && Build.VERSION.SDK_INT >= 19 && !TextUtils.isEmpty(messageObject.messageOwner.media.caption)) {
                                 msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDDBC " + messageObject.messageOwner.media.caption);
                             } else {
-                                msg = LocaleController.formatString("NotificationMessagePhoto", R.string.NotificationMessagePhoto, name);
+                                if (messageObject.messageOwner.media.ttl_seconds != 0) {
+                                    msg = LocaleController.formatString("NotificationMessageSDPhoto", R.string.NotificationMessageSDPhoto, name);
+                                } else {
+                                    msg = LocaleController.formatString("NotificationMessagePhoto", R.string.NotificationMessagePhoto, name);
+                                }
                             }
                         } else if (messageObject.isVideo()) {
                             if (!shortMessage && Build.VERSION.SDK_INT >= 19 && !TextUtils.isEmpty(messageObject.messageOwner.media.caption)) {
                                 msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDCF9 " + messageObject.messageOwner.media.caption);
                             } else {
-                                msg = LocaleController.formatString("NotificationMessageVideo", R.string.NotificationMessageVideo, name);
+                                if (messageObject.messageOwner.media.ttl_seconds != 0) {
+                                    msg = LocaleController.formatString("NotificationMessageSDVideo", R.string.NotificationMessageSDVideo, name);
+                                } else {
+                                    msg = LocaleController.formatString("NotificationMessageVideo", R.string.NotificationMessageVideo, name);
+                                }
                             }
                         } else if (messageObject.isGame()) {
                             msg = LocaleController.formatString("NotificationMessageGame", R.string.NotificationMessageGame, name, messageObject.messageOwner.media.game.title);
                         } else if (messageObject.isVoice()) {
                             msg = LocaleController.formatString("NotificationMessageAudio", R.string.NotificationMessageAudio, name);
+                        } else if (messageObject.isRoundVideo()) {
+                            msg = LocaleController.formatString("NotificationMessageRound", R.string.NotificationMessageRound, name);
                         } else if (messageObject.isMusic()) {
                             msg = LocaleController.formatString("NotificationMessageMusic", R.string.NotificationMessageMusic, name);
                         } else if (messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaContact) {
@@ -1035,6 +1046,8 @@ public class NotificationsController {
                             msg = LocaleController.formatString("ActionMigrateFromGroupNotify", R.string.ActionMigrateFromGroupNotify, chat.title);
                         } else if (messageObject.messageOwner.action instanceof TLRPC.TL_messageActionChannelMigrateFrom) {
                             msg = LocaleController.formatString("ActionMigrateFromGroupNotify", R.string.ActionMigrateFromGroupNotify, messageObject.messageOwner.action.title);
+                        } else if (messageObject.messageOwner.action instanceof TLRPC.TL_messageActionScreenshotTaken) {
+                            msg = messageObject.messageText.toString();
                         } else if (messageObject.messageOwner.action instanceof TLRPC.TL_messageActionPinMessage) {
                             if (messageObject.replyMessageObject == null) {
                                 if (!ChatObject.isChannel(chat) || chat.megagroup) {
@@ -1085,6 +1098,12 @@ public class NotificationsController {
                                         msg = LocaleController.formatString("NotificationActionPinnedVoice", R.string.NotificationActionPinnedVoice, name, chat.title);
                                     } else {
                                         msg = LocaleController.formatString("NotificationActionPinnedVoiceChannel", R.string.NotificationActionPinnedVoiceChannel, chat.title);
+                                    }
+                                } else if (object.isRoundVideo()) {
+                                    if (!ChatObject.isChannel(chat) || chat.megagroup) {
+                                        msg = LocaleController.formatString("NotificationActionPinnedRound", R.string.NotificationActionPinnedRound, name, chat.title);
+                                    } else {
+                                        msg = LocaleController.formatString("NotificationActionPinnedRoundChannel", R.string.NotificationActionPinnedRoundChannel, chat.title);
                                     }
                                 } else if (object.isSticker()) {
                                     String emoji = messageObject.getStickerEmoji();
@@ -1192,6 +1211,8 @@ public class NotificationsController {
                                 }
                             } else if (messageObject.isVoice()) {
                                 msg = LocaleController.formatString("ChannelMessageAudio", R.string.ChannelMessageAudio, name);
+                            } else if (messageObject.isRoundVideo()) {
+                                msg = LocaleController.formatString("ChannelMessageRound", R.string.ChannelMessageRound, name);
                             } else if (messageObject.isMusic()) {
                                 msg = LocaleController.formatString("ChannelMessageMusic", R.string.ChannelMessageMusic, name);
                             } else if (messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaContact) {
@@ -1241,6 +1262,8 @@ public class NotificationsController {
                                 }
                             } else if (messageObject.isVoice()) {
                                 msg = LocaleController.formatString("ChannelMessageGroupAudio", R.string.ChannelMessageGroupAudio, name, chat.title);
+                            } else if (messageObject.isRoundVideo()) {
+                                msg = LocaleController.formatString("ChannelMessageGroupRound", R.string.ChannelMessageGroupRound, name, chat.title);
                             } else if (messageObject.isMusic()) {
                                 msg = LocaleController.formatString("ChannelMessageGroupMusic", R.string.ChannelMessageGroupMusic, name, chat.title);
                             } else if (messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaContact) {
@@ -1291,6 +1314,8 @@ public class NotificationsController {
                             }
                         } else if (messageObject.isVoice()) {
                             msg = LocaleController.formatString("NotificationMessageGroupAudio", R.string.NotificationMessageGroupAudio, name, chat.title);
+                        } else if (messageObject.isRoundVideo()) {
+                            msg = LocaleController.formatString("NotificationMessageGroupRound", R.string.NotificationMessageGroupRound, name, chat.title);
                         } else if (messageObject.isMusic()) {
                             msg = LocaleController.formatString("NotificationMessageGroupMusic", R.string.NotificationMessageGroupMusic, name, chat.title);
                         } else if (messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaContact) {
@@ -1802,12 +1827,15 @@ public class NotificationsController {
                     mBuilder.setLargeIcon(img.getBitmap());
                 } else {
                     try {
-                        float scaleFactor = 160.0f / AndroidUtilities.dp(50);
-                        BitmapFactory.Options options = new BitmapFactory.Options();
-                        options.inSampleSize = scaleFactor < 1 ? 1 : (int) scaleFactor;
-                        Bitmap bitmap = BitmapFactory.decodeFile(FileLoader.getPathToAttach(photoPath, true).toString(), options);
-                        if (bitmap != null) {
-                            mBuilder.setLargeIcon(bitmap);
+                        File file = FileLoader.getPathToAttach(photoPath, true);
+                        if (file.exists()) {
+                            float scaleFactor = 160.0f / AndroidUtilities.dp(50);
+                            BitmapFactory.Options options = new BitmapFactory.Options();
+                            options.inSampleSize = scaleFactor < 1 ? 1 : (int) scaleFactor;
+                            Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath(), options);
+                            if (bitmap != null) {
+                                mBuilder.setLargeIcon(bitmap);
+                            }
                         }
                     } catch (Throwable e) {
                         //ignore
@@ -2061,12 +2089,15 @@ public class NotificationsController {
                     builder.setLargeIcon(img.getBitmap());
                 } else {
                     try {
-                        float scaleFactor = 160.0f / AndroidUtilities.dp(50);
-                        BitmapFactory.Options options = new BitmapFactory.Options();
-                        options.inSampleSize = scaleFactor < 1 ? 1 : (int) scaleFactor;
-                        Bitmap bitmap = BitmapFactory.decodeFile(FileLoader.getPathToAttach(photoPath, true).toString(), options);
-                        if (bitmap != null) {
-                            builder.setLargeIcon(bitmap);
+                        File file = FileLoader.getPathToAttach(photoPath, true);
+                        if (file.exists()) {
+                            float scaleFactor = 160.0f / AndroidUtilities.dp(50);
+                            BitmapFactory.Options options = new BitmapFactory.Options();
+                            options.inSampleSize = scaleFactor < 1 ? 1 : (int) scaleFactor;
+                            Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath(), options);
+                            if (bitmap != null) {
+                                builder.setLargeIcon(bitmap);
+                            }
                         }
                     } catch (Throwable e) {
                         //ignore

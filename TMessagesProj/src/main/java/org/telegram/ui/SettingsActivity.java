@@ -130,6 +130,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     private int numberSectionRow;
     private int numberRow;
     private int usernameRow;
+    private int bioRow;
     private int settingsSectionRow;
     private int settingsSectionRow2;
     private int enableAnimationsRow;
@@ -157,6 +158,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     private int sendLogsRow;
     private int clearLogsRow;
     private int switchBackendButtonRow;
+    private int dumpCallStatsRow;
     private int versionRow;
     private int contactsSectionRow;
     private int contactsReimportRow;
@@ -235,6 +237,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         };
         NotificationCenter.getInstance().addObserver(this, NotificationCenter.updateInterfaces);
         NotificationCenter.getInstance().addObserver(this, NotificationCenter.featuredStickersDidLoaded);
+        NotificationCenter.getInstance().addObserver(this, NotificationCenter.userInfoDidLoaded);
 
         rowCount = 0;
         overscrollRow = rowCount++;
@@ -242,6 +245,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         numberSectionRow = rowCount++;
         numberRow = rowCount++;
         usernameRow = rowCount++;
+        bioRow = rowCount++;
         settingsSectionRow = rowCount++;
         settingsSectionRow2 = rowCount++;
         notificationRow = rowCount++;
@@ -272,6 +276,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         if (BuildVars.DEBUG_VERSION) {
             sendLogsRow = rowCount++;
             clearLogsRow = rowCount++;
+            dumpCallStatsRow = rowCount++;
             switchBackendButtonRow = rowCount++;
         }
         versionRow = rowCount++;
@@ -294,6 +299,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         MessagesController.getInstance().cancelLoadFullUser(UserConfig.getClientUserId());
         NotificationCenter.getInstance().removeObserver(this, NotificationCenter.updateInterfaces);
         NotificationCenter.getInstance().removeObserver(this, NotificationCenter.featuredStickersDidLoaded);
+        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.userInfoDidLoaded);
         avatarUpdater.clear();
     }
 
@@ -373,10 +379,17 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
         listView = new RecyclerListView(context);
         listView.setVerticalScrollBarEnabled(false);
-        listView.setLayoutManager(layoutManager = new LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false));
+        listView.setLayoutManager(layoutManager = new LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false) {
+            @Override
+            public boolean supportsPredictiveItemAnimations() {
+                return false;
+            }
+        });
         listView.setGlowColor(Theme.getColor(Theme.key_avatar_backgroundActionBarBlue));
         frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
         listView.setAdapter(listAdapter);
+        listView.setItemAnimator(null);
+        listView.setLayoutAnimation(null);
         listView.setOnItemClickListener(new RecyclerListView.OnItemClickListener() {
             @Override
             public void onItemClick(View view, final int position) {
@@ -423,7 +436,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                         return;
                     }
                     final TextView message = new TextView(getParentActivity());
-                    Spannable spanned = new SpannableString(Html.fromHtml(LocaleController.getString("AskAQuestionInfo", R.string.AskAQuestionInfo)));
+                    Spannable spanned = new SpannableString(Html.fromHtml(LocaleController.getString("AskAQuestionInfo", R.string.AskAQuestionInfo).replace("\n", "<br>")));
                     URLSpan[] spans = spanned.getSpans(0, spanned.length(), URLSpan.class);
                     for (int a = 0; a < spans.length; a++) {
                         URLSpan span = spans[a];
@@ -545,6 +558,11 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                     showDialog(builder.create());
                 } else if (position == usernameRow) {
                     presentFragment(new ChangeUsernameActivity());
+                } else if (position == bioRow) {
+                    TLRPC.TL_userFull userFull = MessagesController.getInstance().getUserFull(UserConfig.getClientUserId());
+                    if (userFull != null) {
+                        presentFragment(new ChangeBioActivity());
+                    }
                 } else if (position == numberRow) {
                     presentFragment(new ChangePhoneHelpActivity());
                 } else if (position == stickersRow) {
@@ -611,6 +629,15 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                     linearLayout.addView(cell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48));
                     builder.setCustomView(linearLayout);
                     showDialog(builder.create());
+                } else if (position == dumpCallStatsRow) {
+                    SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
+                    boolean dump = preferences.getBoolean("dbg_dump_call_stats", false);
+                    SharedPreferences.Editor editor = preferences.edit();
+                    editor.putBoolean("dbg_dump_call_stats", !dump);
+                    editor.commit();
+                    if (view instanceof TextCheckCell) {
+                        ((TextCheckCell) view).setChecked(!dump);
+                    }
                 }
             }
         });
@@ -860,7 +887,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     }
 
     @Override
-    public void setPhotoChecked(int index) {
+    public void setPhotoChecked(int index, VideoEditedInfo videoEditedInfo) {
     }
 
     @Override
@@ -991,6 +1018,11 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         } else if (id == NotificationCenter.featuredStickersDidLoaded) {
             if (listAdapter != null) {
                 listAdapter.notifyItemChanged(stickersRow);
+            }
+        } else if (id == NotificationCenter.userInfoDidLoaded) {
+            Integer uid = (Integer) args[0];
+            if (uid == UserConfig.getClientUserId()) {
+                listAdapter.notifyItemChanged(bioRow);
             }
         }
     }
@@ -1218,7 +1250,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                         textCell.setText(LocaleController.getString("ImportContacts", R.string.ImportContacts), true);
                     } else if (position == stickersRow) {
                         int count = StickersQuery.getUnreadStickerSets().size();
-                        textCell.setTextAndValue(LocaleController.getString("Stickers", R.string.Stickers), count != 0 ? String.format("%d", count) : "", true);
+                        textCell.setTextAndValue(LocaleController.getString("StickersName", R.string.StickersName), count != 0 ? String.format("%d", count) : "", true);
                     } else if (position == privacyPolicyRow) {
                         textCell.setText(LocaleController.getString("PrivacyPolicy", R.string.PrivacyPolicy), true);
                     } else if (position == emojiRow) {
@@ -1243,6 +1275,8 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                         textCell.setTextAndValueAndCheck(LocaleController.getString("ChromeCustomTabs", R.string.ChromeCustomTabs), LocaleController.getString("ChromeCustomTabsInfo", R.string.ChromeCustomTabsInfo), MediaController.getInstance().canCustomTabs(), false, true);
                     } else if (position == directShareRow) {
                         textCell.setTextAndValueAndCheck(LocaleController.getString("DirectShare", R.string.DirectShare), LocaleController.getString("DirectShareInfo", R.string.DirectShareInfo), MediaController.getInstance().canDirectShare(), false, true);
+                    } else if (position == dumpCallStatsRow) {
+                        textCell.setTextAndCheck("Dump detailed call stats", preferences.getBoolean("dbg_dump_call_stats", false), true);
                     }
                     break;
                 }
@@ -1273,12 +1307,23 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                     } else if (position == usernameRow) {
                         TLRPC.User user = UserConfig.getCurrentUser();
                         String value;
-                        if (user != null && user.username != null && user.username.length() != 0) {
+                        if (user != null && !TextUtils.isEmpty(user.username)) {
                             value = "@" + user.username;
                         } else {
                             value = LocaleController.getString("UsernameEmpty", R.string.UsernameEmpty);
                         }
-                        textCell.setTextAndValue(value, LocaleController.getString("Username", R.string.Username), false);
+                        textCell.setTextAndValue(value, LocaleController.getString("Username", R.string.Username), true);
+                    } else if (position == bioRow) {
+                        TLRPC.TL_userFull userFull = MessagesController.getInstance().getUserFull(UserConfig.getClientUserId());
+                        String value;
+                        if (userFull == null) {
+                            value = LocaleController.getString("Loading", R.string.Loading);
+                        } else if (userFull != null && !TextUtils.isEmpty(userFull.about)) {
+                            value = userFull.about;
+                        } else {
+                            value = LocaleController.getString("UserBioEmpty", R.string.UserBioEmpty);
+                        }
+                        textCell.setTextAndValue(value, LocaleController.getString("UserBio", R.string.UserBio), false);
                     }
                     break;
                 }
@@ -1290,10 +1335,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             int position = holder.getAdapterPosition();
             return position == textSizeRow || position == enableAnimationsRow || position == notificationRow || position == backgroundRow || position == numberRow ||
                     position == askQuestionRow || position == sendLogsRow || position == sendByEnterRow || position == autoplayGifsRow || position == privacyRow ||
-                    position == clearLogsRow || position == languageRow || position == usernameRow ||
+                    position == clearLogsRow || position == languageRow || position == usernameRow || position == bioRow ||
                     position == switchBackendButtonRow || position == telegramFaqRow || position == contactsSortRow || position == contactsReimportRow || position == saveToGalleryRow ||
                     position == stickersRow || position == raiseToSpeakRow || position == privacyPolicyRow || position == customTabsRow || position == directShareRow || position == versionRow ||
-                    position == emojiRow || position == dataRow || position == themeRow;
+                    position == emojiRow || position == dataRow || position == themeRow || position == dumpCallStatsRow;
         }
 
         @Override
@@ -1363,13 +1408,13 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             }
             if (position == settingsSectionRow || position == supportSectionRow || position == messagesSectionRow || position == contactsSectionRow) {
                 return 1;
-            } else if (position == enableAnimationsRow || position == sendByEnterRow || position == saveToGalleryRow || position == autoplayGifsRow || position == raiseToSpeakRow || position == customTabsRow || position == directShareRow) {
+            } else if (position == enableAnimationsRow || position == sendByEnterRow || position == saveToGalleryRow || position == autoplayGifsRow || position == raiseToSpeakRow || position == customTabsRow || position == directShareRow || position == dumpCallStatsRow) {
                 return 3;
             } else if (position == notificationRow || position == themeRow || position == backgroundRow || position == askQuestionRow || position == sendLogsRow || position == privacyRow || position == clearLogsRow || position == switchBackendButtonRow || position == telegramFaqRow || position == contactsReimportRow || position == textSizeRow || position == languageRow || position == contactsSortRow || position == stickersRow || position == privacyPolicyRow || position == emojiRow || position == dataRow) {
                 return 2;
             } else if (position == versionRow) {
                 return 5;
-            } else if (position == numberRow || position == usernameRow) {
+            } else if (position == numberRow || position == usernameRow || position == bioRow) {
                 return 6;
             } else if (position == settingsSectionRow2 || position == messagesSectionRow2 || position == supportSectionRow2 || position == numberSectionRow) {
                 return 4;

@@ -330,7 +330,7 @@ public class ThemePreviewActivity extends BaseFragment implements NotificationCe
             @Override
             public void onClick(View v) {
                 Theme.applyPreviousTheme();
-                parentLayout.rebuildAllFragmentViews(false);
+                parentLayout.rebuildAllFragmentViews(false, false);
                 finishFragment();
             }
         });
@@ -348,7 +348,7 @@ public class ThemePreviewActivity extends BaseFragment implements NotificationCe
             @Override
             public void onClick(View v) {
                 applied = true;
-                parentLayout.rebuildAllFragmentViews(false);
+                parentLayout.rebuildAllFragmentViews(false, false);
                 Theme.applyThemeFile(themeFile, applyingTheme.name, false);
                 finishFragment();
             }
@@ -383,7 +383,7 @@ public class ThemePreviewActivity extends BaseFragment implements NotificationCe
     @Override
     public boolean onBackPressed() {
         Theme.applyPreviousTheme();
-        parentLayout.rebuildAllFragmentViews(false);
+        parentLayout.rebuildAllFragmentViews(false, false);
         return super.onBackPressed();
     }
 
@@ -617,6 +617,7 @@ public class ThemePreviewActivity extends BaseFragment implements NotificationCe
             message.from_id = 0;
             message.id = 5;
             message.media = new TLRPC.TL_messageMediaDocument();
+            message.media.flags |= 3;
             message.media.document = new TLRPC.TL_document();
             message.media.document.mime_type = "audio/mp4";
             message.media.document.thumb = new TLRPC.TL_photoSizeEmpty();
@@ -655,6 +656,7 @@ public class ThemePreviewActivity extends BaseFragment implements NotificationCe
             message.from_id = UserConfig.getClientUserId();
             message.id = 1;
             message.media = new TLRPC.TL_messageMediaDocument();
+            message.media.flags |= 3;
             message.media.document = new TLRPC.TL_document();
             message.media.document.mime_type = "audio/ogg";
             message.media.document.thumb = new TLRPC.TL_photoSizeEmpty();
@@ -685,6 +687,7 @@ public class ThemePreviewActivity extends BaseFragment implements NotificationCe
             message.from_id = 0;
             message.id = 1;
             message.media = new TLRPC.TL_messageMediaPhoto();
+            message.media.flags |= 3;
             message.media.photo = new TLRPC.TL_photo();
             message.media.photo.has_stickers = false;
             message.media.photo.id = 1;
@@ -739,7 +742,7 @@ public class ThemePreviewActivity extends BaseFragment implements NotificationCe
                     }
 
                     @Override
-                    public boolean needPlayAudio(MessageObject messageObject) {
+                    public boolean needPlayMessage(MessageObject messageObject) {
                         return false;
                     }
 
@@ -804,7 +807,7 @@ public class ThemePreviewActivity extends BaseFragment implements NotificationCe
                     }
 
                     @Override
-                    public void didPressedInstantButton(ChatMessageCell cell) {
+                    public void didPressedInstantButton(ChatMessageCell cell, int type) {
 
                     }
                 });

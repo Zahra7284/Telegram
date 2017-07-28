@@ -8,6 +8,10 @@
 
 package org.telegram.ui.Components;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
@@ -29,7 +33,9 @@ import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.VelocityTracker;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.view.ViewTreeObserver;
@@ -46,6 +52,7 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.Emoji;
 import org.telegram.messenger.EmojiData;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.query.StickersQuery;
@@ -82,6 +89,13 @@ public class EmojiView extends FrameLayout implements NotificationCenter.Notific
         void onShowStickerSet(TLRPC.StickerSet stickerSet, TLRPC.InputStickerSet inputStickerSet);
         void onStickerSetAdd(TLRPC.StickerSetCovered stickerSet);
         void onStickerSetRemove(TLRPC.StickerSetCovered stickerSet);
+    }
+
+    public interface DragListener{
+        void onDragStart();
+        void onDragEnd(float velocity);
+        void onDragCancel();
+        void onDrag(int offset);
     }
 
     private StickerPreviewViewer.StickerPreviewViewerDelegate stickerPreviewViewerDelegate = new StickerPreviewViewer.StickerPreviewViewerDelegate() {
@@ -576,6 +590,10 @@ public class EmojiView extends FrameLayout implements NotificationCenter.Notific
     private TrendingGridAdapter trendingGridAdapter;
     private RecyclerListView.OnItemClickListener stickersOnItemClickListener;
     private PagerSlidingTabStrip pagerSlidingTabStrip;
+    private TextView mediaBanTooltip;
+    private DragListener dragListener;
+
+    private int currentChatId;
 
     private HashMap<Long, TLRPC.StickerSetCovered> installingStickerSets = new HashMap<>();
     private HashMap<Long, TLRPC.StickerSetCovered> removingStickerSets = new HashMap<>();
@@ -865,11 +883,33 @@ public class EmojiView extends FrameLayout implements NotificationCenter.Notific
                 float lastX;
                 float lastTranslateX;
                 boolean first = true;
+                final int touchslop=ViewConfiguration.get(getContext()).getScaledTouchSlop();
+                float downX, downY;
+                boolean draggingVertically, draggingHorizontally;
+                VelocityTracker vTracker;
 
                 @Override
                 public boolean onInterceptTouchEvent(MotionEvent ev) {
                     if (getParent() != null) {
                         getParent().requestDisallowInterceptTouchEvent(true);
+                    }
+                    if(ev.getAction()==MotionEvent.ACTION_DOWN){
+                        draggingVertically=draggingHorizontally=false;
+                        downX=ev.getRawX();
+                        downY=ev.getRawY();
+                    }else{
+                        if(!draggingVertically && !draggingHorizontally && dragListener!=null){
+                            if(Math.abs(ev.getRawY()-downY)>=touchslop){
+                                draggingVertically=true;
+                                downY=ev.getRawY();
+								dragListener.onDragStart();
+                                if(startedScroll){
+                                    pager.endFakeDrag();
+                                    startedScroll=false;
+                                }
+                                return true;
+                            }
+                        }
                     }
                     return super.onInterceptTouchEvent(ev);
                 }
@@ -879,6 +919,46 @@ public class EmojiView extends FrameLayout implements NotificationCenter.Notific
                     if (first) {
                         first = false;
                         lastX = ev.getX();
+                    }
+                    if(ev.getAction()==MotionEvent.ACTION_DOWN){
+                        draggingVertically=draggingHorizontally=false;
+                        downX=ev.getRawX();
+                        downY=ev.getRawY();
+                    }else{
+                        if(!draggingVertically && !draggingHorizontally && dragListener!=null){
+                            if(Math.abs(ev.getRawX()-downX)>=touchslop){
+                                draggingHorizontally=true;
+                            }else if(Math.abs(ev.getRawY()-downY)>=touchslop){
+                                draggingVertically=true;
+                                downY=ev.getRawY();
+                                dragListener.onDragStart();
+                                if(startedScroll){
+                                    pager.endFakeDrag();
+                                    startedScroll=false;
+                                }
+                            }
+                        }
+                    }
+                    if(draggingVertically){
+                        if(vTracker==null)
+                            vTracker=VelocityTracker.obtain();
+                        vTracker.addMovement(ev);
+                        if(ev.getAction()==MotionEvent.ACTION_UP || ev.getAction()==MotionEvent.ACTION_CANCEL){
+                            vTracker.computeCurrentVelocity(1000);
+                            float velocity=vTracker.getYVelocity();
+                            vTracker.recycle();
+                            vTracker=null;
+                            if(ev.getAction()==MotionEvent.ACTION_UP){
+                                dragListener.onDragEnd(velocity);
+                            }else{
+                                dragListener.onDragCancel();
+                            }
+                            first=true;
+                            draggingVertically=draggingHorizontally=false;
+                        }else{
+                            dragListener.onDrag(Math.round(ev.getRawY()-downY));
+                        }
+                        return true;
                     }
                     float newTranslationX = stickersTab.getTranslationX();
                     if (stickersTab.getScrollX() == 0 && newTranslationX == 0) {
@@ -912,6 +992,7 @@ public class EmojiView extends FrameLayout implements NotificationCenter.Notific
                     lastX = ev.getX();
                     if (ev.getAction() == MotionEvent.ACTION_CANCEL || ev.getAction() == MotionEvent.ACTION_UP) {
                         first = true;
+                        draggingVertically=draggingHorizontally=false;
                         if (startedScroll) {
                             pager.endFakeDrag();
                             startedScroll = false;
@@ -1086,6 +1167,15 @@ public class EmojiView extends FrameLayout implements NotificationCenter.Notific
         emojiGrids.get(0).setEmptyView(textView);
 
         addView(pager, 0, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT | Gravity.TOP));
+
+        mediaBanTooltip = new CorrectlyMeasuringTextView(context);
+        mediaBanTooltip.setBackgroundDrawable(Theme.createRoundRectDrawable(AndroidUtilities.dp(3), Theme.getColor(Theme.key_chat_gifSaveHintBackground)));
+        mediaBanTooltip.setTextColor(Theme.getColor(Theme.key_chat_gifSaveHintText));
+        mediaBanTooltip.setPadding(AndroidUtilities.dp(8), AndroidUtilities.dp(7), AndroidUtilities.dp(8), AndroidUtilities.dp(7));
+        mediaBanTooltip.setGravity(Gravity.CENTER_VERTICAL);
+        mediaBanTooltip.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+        mediaBanTooltip.setVisibility(INVISIBLE);
+        addView(mediaBanTooltip, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.RIGHT | Gravity.TOP, 30, 48 + 5, 5, 0));
 
         emojiSize = AndroidUtilities.dp(AndroidUtilities.isTablet() ? 40 : 32);
         pickerView = new EmojiColorPickerView(context);
@@ -1601,6 +1691,10 @@ public class EmojiView extends FrameLayout implements NotificationCenter.Notific
         listener = value;
     }
 
+    public void setDragListener(DragListener dragListener){
+        this.dragListener=dragListener;
+    }
+
     public void invalidateViews() {
         for (int a = 0; a < emojiGrids.size(); a++) {
             emojiGrids.get(a).invalidateViews();
@@ -1609,6 +1703,9 @@ public class EmojiView extends FrameLayout implements NotificationCenter.Notific
 
     public void onOpen(boolean forceEmoji) {
         if (stickersTab != null) {
+            if (currentPage != 0 && currentChatId != 0) {
+                currentPage = 0;
+            }
             if (currentPage == 0 || forceEmoji) {
                 if (pager.getCurrentItem() == 6) {
                     pager.setCurrentItem(0, !forceEmoji);
@@ -1726,6 +1823,71 @@ public class EmojiView extends FrameLayout implements NotificationCenter.Notific
         }
     }
 
+    public void setStickersBanned(boolean value, int chatId) {
+        if (value) {
+            currentChatId = chatId;
+        } else {
+            currentChatId = 0;
+        }
+        View view = pagerSlidingTabStrip.getTab(6);
+        if (view != null) {
+            view.setAlpha(currentChatId != 0 ? 0.5f : 1.0f);
+            if (currentChatId != 0 && pager.getCurrentItem() == 6) {
+                pager.setCurrentItem(0);
+            }
+        }
+    }
+
+    public void showStickerBanHint() {
+        if (mediaBanTooltip.getVisibility() == VISIBLE) {
+            return;
+        }
+        TLRPC.Chat chat = MessagesController.getInstance().getChat(currentChatId);
+        if (chat == null || chat.banned_rights == null) {
+            return;
+        }
+
+        if (AndroidUtilities.isBannedForever(chat.banned_rights.until_date)) {
+            mediaBanTooltip.setText(LocaleController.getString("AttachStickersRestrictedForever", R.string.AttachStickersRestrictedForever));
+        } else {
+            mediaBanTooltip.setText(LocaleController.formatString("AttachStickersRestricted", R.string.AttachStickersRestricted, LocaleController.formatDateForBan(chat.banned_rights.until_date)));
+        }
+        mediaBanTooltip.setVisibility(View.VISIBLE);
+        AnimatorSet AnimatorSet = new AnimatorSet();
+        AnimatorSet.playTogether(
+                ObjectAnimator.ofFloat(mediaBanTooltip, "alpha", 0.0f, 1.0f)
+        );
+        AnimatorSet.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                AndroidUtilities.runOnUIThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (mediaBanTooltip == null) {
+                            return;
+                        }
+                        AnimatorSet AnimatorSet = new AnimatorSet();
+                        AnimatorSet.playTogether(
+                                ObjectAnimator.ofFloat(mediaBanTooltip, "alpha", 0.0f)
+                        );
+                        AnimatorSet.addListener(new AnimatorListenerAdapter() {
+                            @Override
+                            public void onAnimationEnd(Animator animation) {
+                                if (mediaBanTooltip != null) {
+                                    mediaBanTooltip.setVisibility(View.INVISIBLE);
+                                }
+                            }
+                        });
+                        AnimatorSet.setDuration(300);
+                        AnimatorSet.start();
+                    }
+                }, 5000);
+            }
+        });
+        AnimatorSet.setDuration(300);
+        AnimatorSet.start();
+    }
+
     private void updateVisibleTrendingSets() {
         if (trendingGridAdapter == null || trendingGridAdapter == null) {
             return;
@@ -1764,6 +1926,10 @@ public class EmojiView extends FrameLayout implements NotificationCenter.Notific
         } catch (Exception e) {
             FileLog.e(e);
         }
+    }
+
+    public boolean areThereAnyStickers(){
+        return stickersGridAdapter!=null && stickersGridAdapter.getItemCount()>0;
     }
 
     @SuppressWarnings("unchecked")
@@ -2192,6 +2358,15 @@ public class EmojiView extends FrameLayout implements NotificationCenter.Notific
                 view = views.get(position);
             }
             viewGroup.removeView(view);
+        }
+
+        @Override
+        public boolean canScrollToTab(int position) {
+            if (position == 6 && currentChatId != 0) {
+                showStickerBanHint();
+                return false;
+            }
+            return true;
         }
 
         public int getCount() {

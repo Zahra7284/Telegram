@@ -66,6 +66,7 @@
         android:allowBackup="false"
         android:hardwareAccelerated="@bool/useHardwareAcceleration"
         android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher"
         android:largeHeap="true"
         android:theme="@style/Theme.TMessages.Start"
         android:manageSpaceActivity="org.telegram.ui.ManageSpaceActivity">
@@ -124,6 +125,8 @@
                 <data android:host="telegram.me" android:scheme="https" />
                 <data android:host="telegram.dog" android:scheme="http" />
                 <data android:host="telegram.dog" android:scheme="https" />
+                <data android:host="telesco.pe" android:scheme="http" />
+                <data android:host="telesco.pe" android:scheme="https" />
                 <data android:host="t.me" android:scheme="http" />
                 <data android:host="t.me" android:scheme="https" />
             </intent-filter>
@@ -159,6 +162,7 @@
         </activity>
         <activity
             android:name="org.telegram.ui.IntroActivity"
+            android:launchMode="singleTask"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize">
         </activity>
         <activity
@@ -260,6 +264,16 @@
                 <action android:name="android.media.browse.MediaBrowserService"/>
             </intent-filter>
         </service>
+        <service android:name=".WearDataLayerListenerService">
+            <intent-filter>
+                <!-- listeners receive events that match the action and data filters -->
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <action android:name="com.google.android.gms.wearable.CAPABILITY_CHANGED" />
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+                <data android:scheme="wear" android:host="*" />
+            </intent-filter>
+        </service>
 
         <receiver android:name=".MusicPlayerReceiver" >
             <intent-filter>
@@ -315,7 +329,11 @@
         <meta-data android:name="com.google.android.gms.car.notification.SmallIcon" android:resource="@drawable/ic_player" />
         <meta-data android:name="com.google.android.gms.car.application" android:resource="@xml/automotive_app_desc" />
 
-        <meta-data android:name="com.google.android.gms.vision.DEPENDENCIES" android:value="face"  />
+        <meta-data android:name="com.google.android.gms.vision.DEPENDENCIES" android:value="face" />
+
+        <meta-data android:name="com.samsung.android.icon_container.has_icon_container" android:value="true"/>
+        <meta-data android:name="android.max_aspect" android:value="2.5" />
+
     </application>
 
 </manifest>

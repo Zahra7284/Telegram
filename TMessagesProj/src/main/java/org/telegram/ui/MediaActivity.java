@@ -743,11 +743,11 @@ public class MediaActivity extends BaseFragment implements NotificationCenter.No
                     sharedMediaData[type].addMessage(message, false, enc);
                 }
                 sharedMediaData[type].endReached[loadIndex] = (Boolean) args[5];
-                if (loadIndex == 0 && sharedMediaData[selectedMode].messages.isEmpty() && mergeDialogId != 0) {
-                    sharedMediaData[selectedMode].loading = true;
-                    SharedMediaQuery.loadMedia(mergeDialogId, 0, 50, sharedMediaData[selectedMode].max_id[1], type, true, classGuid);
+                if (loadIndex == 0 && sharedMediaData[type].endReached[loadIndex] && mergeDialogId != 0) {
+                    sharedMediaData[type].loading = true;
+                    SharedMediaQuery.loadMedia(mergeDialogId, 0, 50, sharedMediaData[type].max_id[1], type, true, classGuid);
                 }
-                if (!sharedMediaData[selectedMode].loading) {
+                if (!sharedMediaData[type].loading) {
                     if (progressView != null) {
                         progressView.setVisibility(View.GONE);
                     }
@@ -776,7 +776,7 @@ public class MediaActivity extends BaseFragment implements NotificationCenter.No
                     }
                 }
                 if (selectedMode == 1 || selectedMode == 3 || selectedMode == 4) {
-                    searchItem.setVisibility(!sharedMediaData[selectedMode].messages.isEmpty() && !searching ? View.VISIBLE : View.GONE);
+                    searchItem.setVisibility(!sharedMediaData[type].messages.isEmpty() && !searching ? View.VISIBLE : View.GONE);
                 }
             }
         } else if (id == NotificationCenter.messagesDeleted) {
@@ -830,8 +830,9 @@ public class MediaActivity extends BaseFragment implements NotificationCenter.No
                 ArrayList<MessageObject> arr = (ArrayList<MessageObject>) args[1];
                 boolean enc = ((int) dialog_id) == 0;
                 boolean updated = false;
-                for (MessageObject obj : arr) {
-                    if (obj.messageOwner.media == null) {
+                for (int a = 0; a < arr.size(); a++) {
+                    MessageObject obj = arr.get(a);
+                    if (obj.messageOwner.media == null || obj.isSecretPhoto()) {
                         continue;
                     }
                     int type = SharedMediaQuery.getMediaType(obj.messageOwner);
@@ -976,7 +977,7 @@ public class MediaActivity extends BaseFragment implements NotificationCenter.No
     public boolean isPhotoChecked(int index) { return false; }
 
     @Override
-    public void setPhotoChecked(int index) { }
+    public void setPhotoChecked(int index, VideoEditedInfo videoEditedInfo) { }
 
     @Override
     public boolean cancelButtonPressed() { return true; }
@@ -1252,7 +1253,7 @@ public class MediaActivity extends BaseFragment implements NotificationCenter.No
                             }
                         }
                     } else if (!cell.isLoading()) {
-                        FileLoader.getInstance().loadFile(cell.getMessage().getDocument(), false, false);
+                        FileLoader.getInstance().loadFile(cell.getMessage().getDocument(), false, 0);
                         cell.updateFileExistIcon();
                     } else {
                         FileLoader.getInstance().cancelLoadFile(cell.getMessage().getDocument());
@@ -1264,7 +1265,7 @@ public class MediaActivity extends BaseFragment implements NotificationCenter.No
                     TLRPC.WebPage webPage = message.messageOwner.media.webpage;
                     String link = null;
                     if (webPage != null && !(webPage instanceof TLRPC.TL_webPageEmpty)) {
-                        if (Build.VERSION.SDK_INT >= 16 && webPage.embed_url != null && webPage.embed_url.length() != 0) {
+                        if (webPage.embed_url != null && webPage.embed_url.length() != 0) {
                             openWebView(webPage);
                             return;
                         } else {
